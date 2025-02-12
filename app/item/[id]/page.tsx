@@ -18,6 +18,7 @@ const ItemPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false); // Nouvel état pour gérer la soumission
   const [error, setError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [isEmailRecognized, setIsEmailRecognized] = useState(false);
 
   useEffect(() => {
     console.log("ID récupéré de l'URL :", id); // ✅ Vérification
@@ -58,46 +59,106 @@ const ItemPage = () => {
       setEmailError("Veuillez entrer un email valide.");
       return;
     }
-
     setEmailError(null);
     setError(null);
     setIsSubmitting(true); // Bloque le bouton lors de la soumission
+
     try {
-      // Prépare les données à envoyer
-      const data = {
-        id: id,
-        first_name: firstName,
-        last_name: lastName,
-        email: email,
-        name: itemName,
-        location: room,
-        quantity: quantity,
-        action: action, // "add" ou "remove"
-      };
-  
-      // Appelle le backend Flask
-      const response = await fetch("http://localhost:5000/transaction", {
+      // Vérifie si l'email existe déjà
+      const checkResponse = await fetch("http://localhost:5000/check-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ email }),
       });
   
-      const result = await response.json();
+      const checkResult = await checkResponse.json();
   
-      if (response.ok && result.success) {
-        alert('Transaction soumise avec succès !');
-        // Réinitialiser le formulaire après une soumission réussie
-        setFirstName('');
-        setLastName('');
-        setEmail('');
-        setQuantity(1);
+      if (checkResponse.ok && checkResult.success) {
+        if (!checkResult.exists) {
+          // Enregistre le nouvel utilisateur
+          const registerResponse = await fetch("http://localhost:5000/register-user", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, first_name: firstName, last_name: lastName }),
+          });
+  
+          const registerResult = await registerResponse.json();
+  
+          if (!registerResponse.ok || !registerResult.success) {
+            setError(registerResult.message || "Erreur lors de l'enregistrement.");
+            return;
+          }
+        }
+  
+        // Continue avec la transaction
+        const data = {
+          id: id,
+          first_name: firstName,
+          last_name: lastName,
+          email: email,
+          name: itemName,
+          location: room,
+          quantity: quantity,
+          action: action,
+        };
+  
+        const transactionResponse = await fetch("http://localhost:5000/transaction", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+  
+        const transactionResult = await transactionResponse.json();
+  
+        if (transactionResponse.ok && transactionResult.success) {
+          alert('Transaction soumise avec succès !');
+          setFirstName('');
+          setLastName('');
+          setEmail('');
+          setQuantity(1);
+        } else {
+          setError(transactionResult.message || "Une erreur s'est produite.");
+        }
       } else {
-        setError(result.message || "Une erreur s'est produite.");
+        setError(checkResult.message || "Erreur de vérification de l'email.");
       }
     } catch (err) {
       setError("Erreur de communication avec le serveur.");
     } finally {
-      setIsSubmitting(false); // Réactive le bouton à la fin
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEmailChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const email = e.target.value;
+    setEmail(email);
+  
+    if (validateEmail(email)) {
+      try {
+        const response = await fetch("http://localhost:5000/check-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+  
+        const result = await response.json();
+  
+        if (response.ok && result.success) {
+          if (result.exists) {
+            setFirstName(result.first_name);
+            setLastName(result.last_name);
+            setIsEmailRecognized(true); // Email reconnu
+          } else {
+            setFirstName("");
+            setLastName("");
+            setIsEmailRecognized(false); // Email non reconnu
+          }
+        } else {
+          setError(result.message || "Erreur de vérification de l'email.");
+        }
+      } catch (err) {
+        setError("Erreur de communication avec le serveur.");
+      }
     }
   };
 
@@ -108,15 +169,17 @@ const ItemPage = () => {
       <h1 className="text-xl font-bold text-gray-900">Réservation d'Objet</h1>
 
       <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-        <div>
-          <label className="block text-gray-700">Nom :</label>
+      <div>
+          <label className="block text-gray-700">Email :</label>
           <input
             type="text"
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onBlur={handleEmailChange}
             required
             className="w-full p-2 border rounded"
           />
+          {emailError && <p className="text-red-500 text-sm mt-1">{emailError}</p>}
         </div>
 
         <div>
@@ -125,24 +188,26 @@ const ItemPage = () => {
             type="text"
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
+            readOnly={isEmailRecognized} // Lecture seule si l'email est reconnu
             required
-            className="w-full p-2 border rounded"
+            className={`w-full p-2 border rounded ${
+              isEmailRecognized ? "bg-gray-200" : "bg-white"
+            }`} // Grisé si l'email est reconnu
           />
         </div>
 
         <div>
-          <label className="block text-gray-700">Email :</label>
+          <label className="block text-gray-700">Nom :</label>
           <input
             type="text"
-            value={email}
-            onChange={(e) => {
-              setEmail(e.target.value);
-              setEmailError(null);
-            }}
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            readOnly={isEmailRecognized} // Lecture seule si l'email est reconnu
             required
-            className="w-full p-2 border rounded"
+            className={`w-full p-2 border rounded ${
+              isEmailRecognized ? "bg-gray-200" : "bg-white"
+            }`} // Grisé si l'email est reconnu
           />
-          {emailError && <p className="text-red-500 text-sm mt-1">{emailError}</p>}
         </div>
 
         <div>
