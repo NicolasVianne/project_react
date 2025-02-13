@@ -18,6 +18,7 @@ const ItemPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false); // Nouvel état pour gérer la soumission
   const [error, setError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [showValidateEmailButton, setShowValidateEmailButton] = useState(false);
   const [isEmailRecognized, setIsEmailRecognized] = useState(false);
 
   useEffect(() => {
@@ -54,73 +55,45 @@ const ItemPage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+  
     if (!validateEmail(email)) {
       setEmailError("Veuillez entrer un email valide.");
       return;
     }
+  
     setEmailError(null);
     setError(null);
     setIsSubmitting(true); // Bloque le bouton lors de la soumission
-
+  
     try {
-      // Vérifie si l'email existe déjà
-      const checkResponse = await fetch("http://localhost:5000/check-email", {
+      // Continue avec la transaction
+      const data = {
+        id: id,
+        first_name: firstName,
+        last_name: lastName,
+        email: email,
+        name: itemName,
+        location: room,
+        quantity: quantity,
+        action: action,
+      };
+  
+      const transactionResponse = await fetch("http://localhost:5000/transaction", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify(data),
       });
   
-      const checkResult = await checkResponse.json();
+      const transactionResult = await transactionResponse.json();
   
-      if (checkResponse.ok && checkResult.success) {
-        if (!checkResult.exists) {
-          // Enregistre le nouvel utilisateur
-          const registerResponse = await fetch("http://localhost:5000/register-user", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, first_name: firstName, last_name: lastName }),
-          });
-  
-          const registerResult = await registerResponse.json();
-  
-          if (!registerResponse.ok || !registerResult.success) {
-            setError(registerResult.message || "Erreur lors de l'enregistrement.");
-            return;
-          }
-        }
-  
-        // Continue avec la transaction
-        const data = {
-          id: id,
-          first_name: firstName,
-          last_name: lastName,
-          email: email,
-          name: itemName,
-          location: room,
-          quantity: quantity,
-          action: action,
-        };
-  
-        const transactionResponse = await fetch("http://localhost:5000/transaction", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        });
-  
-        const transactionResult = await transactionResponse.json();
-  
-        if (transactionResponse.ok && transactionResult.success) {
-          alert('Transaction soumise avec succès !');
-          setFirstName('');
-          setLastName('');
-          setEmail('');
-          setQuantity(1);
-        } else {
-          setError(transactionResult.message || "Une erreur s'est produite.");
-        }
+      if (transactionResponse.ok && transactionResult.success) {
+        alert('Transaction soumise avec succès !');
+        setFirstName('');
+        setLastName('');
+        setEmail('');
+        setQuantity(1);
       } else {
-        setError(checkResult.message || "Erreur de vérification de l'email.");
+        setError(transactionResult.message || "Une erreur s'est produite.");
       }
     } catch (err) {
       setError("Erreur de communication avec le serveur.");
@@ -147,11 +120,13 @@ const ItemPage = () => {
           if (result.exists) {
             setFirstName(result.first_name);
             setLastName(result.last_name);
-            setIsEmailRecognized(true); // Email reconnu
+            setIsEmailRecognized(true);
+            setShowValidateEmailButton(false);
           } else {
             setFirstName("");
             setLastName("");
-            setIsEmailRecognized(false); // Email non reconnu
+            setIsEmailRecognized(false);
+            setShowValidateEmailButton(true);
           }
         } else {
           setError(result.message || "Erreur de vérification de l'email.");
@@ -159,6 +134,35 @@ const ItemPage = () => {
       } catch (err) {
         setError("Erreur de communication avec le serveur.");
       }
+    }
+  };
+
+  const handleValidateEmail = async () => {
+    if (!validateEmail(email)) {
+      setEmailError("Veuillez entrer un email valide.");
+      return;
+    }
+  
+    setEmailError(null);
+    setError(null);
+  
+    try {
+      const response = await fetch("http://localhost:5000/register-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, first_name: firstName, last_name: lastName }),
+      });
+  
+      const result = await response.json();
+  
+      if (response.ok && result.success) {
+        alert("Un email de confirmation a été envoyé. Veuillez vérifier votre boîte de réception.");
+        setShowValidateEmailButton(false); // Cache le bouton après la validation
+      } else {
+        setError(result.message || "Erreur lors de la validation de l'email.");
+      }
+    } catch (err) {
+      setError("Erreur de communication avec le serveur.");
     }
   };
 
@@ -188,11 +192,11 @@ const ItemPage = () => {
             type="text"
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
-            readOnly={isEmailRecognized} // Lecture seule si l'email est reconnu
+            readOnly={!showValidateEmailButton} // Lecture seule si l'email est reconnu
             required
             className={`w-full p-2 border rounded ${
-              isEmailRecognized ? "bg-gray-200" : "bg-white"
-            }`} // Grisé si l'email est reconnu
+              !showValidateEmailButton ? "bg-gray-200" : "bg-white"
+            }`} // Grisé par défaut
           />
         </div>
 
@@ -202,13 +206,23 @@ const ItemPage = () => {
             type="text"
             value={lastName}
             onChange={(e) => setLastName(e.target.value)}
-            readOnly={isEmailRecognized} // Lecture seule si l'email est reconnu
+            readOnly={!showValidateEmailButton} // Lecture seule si l'email est reconnu
             required
             className={`w-full p-2 border rounded ${
-              isEmailRecognized ? "bg-gray-200" : "bg-white"
+              !showValidateEmailButton ? "bg-gray-200" : "bg-white"
             }`} // Grisé si l'email est reconnu
           />
         </div>
+
+        {showValidateEmailButton && firstName.trim() !== "" && lastName.trim() !== "" && (
+          <button
+            type="button"
+            onClick={handleValidateEmail}
+            className="w-full p-2 bg-green-500 text-white rounded hover:bg-green-600"
+          >
+            Valider l'adresse email
+          </button>
+        )}
 
         <div>
           <label className="block text-gray-700">Objet :</label>
@@ -256,9 +270,9 @@ const ItemPage = () => {
 
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || showValidateEmailButton} // Désactive le bouton si showValidateEmailButton est true
           className={`w-full p-2 text-white rounded transition duration-200 
-            ${isSubmitting ? "bg-gray-400 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-600"}`}
+            ${isSubmitting || showValidateEmailButton ? "bg-gray-400 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-600"}`}
         >
           {isSubmitting ? "Traitement en cours..." : "Valider"}
         </button>
