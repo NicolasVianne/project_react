@@ -16,10 +16,10 @@ const ItemPage = () => {
   const [quantity, setQuantity] = useState(1);
   const [action, setAction] = useState("add"); // Ajouter ou Retirer
   const [isSubmitting, setIsSubmitting] = useState(false); // Nouvel état pour gérer la soumission
+  const [isValidating, setIsValidating] = useState(false); // Nouvel état pour gérer la soumission
   const [error, setError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [showValidateEmailButton, setShowValidateEmailButton] = useState(false);
-  const [isEmailRecognized, setIsEmailRecognized] = useState(false);
 
   useEffect(() => {
     console.log("ID récupéré de l'URL :", id); // ✅ Vérification
@@ -120,12 +120,8 @@ const ItemPage = () => {
           if (result.exists) {
             setFirstName(result.first_name);
             setLastName(result.last_name);
-            setIsEmailRecognized(true);
             setShowValidateEmailButton(false);
           } else {
-            setFirstName("");
-            setLastName("");
-            setIsEmailRecognized(false);
             setShowValidateEmailButton(true);
           }
         } else {
@@ -142,7 +138,8 @@ const ItemPage = () => {
       setEmailError("Veuillez entrer un email valide.");
       return;
     }
-  
+
+    setIsValidating(true); 
     setEmailError(null);
     setError(null);
   
@@ -163,6 +160,8 @@ const ItemPage = () => {
       }
     } catch (err) {
       setError("Erreur de communication avec le serveur.");
+    } finally {
+      setIsValidating(false);
     }
   };
 
@@ -177,7 +176,7 @@ const ItemPage = () => {
           <label className="block text-gray-700">Email :</label>
           <input
             type="text"
-            value={email}
+            value={email.trim()}
             onChange={(e) => setEmail(e.target.value)}
             onBlur={handleEmailChange}
             required
@@ -217,10 +216,12 @@ const ItemPage = () => {
         {showValidateEmailButton && firstName.trim() !== "" && lastName.trim() !== "" && (
           <button
             type="button"
+            disabled={isValidating} 
             onClick={handleValidateEmail}
-            className="w-full p-2 bg-green-500 text-white rounded hover:bg-green-600"
+            className={`w-full p-2 bg-green-500 text-white rounded hover:bg-green-600
+              ${isValidating ? "bg-gray-400 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-600"}`}
           >
-            Valider l'adresse email
+            {isValidating ? "Traitement en cours..." : "Valider l'adresse email"}
           </button>
         )}
 
