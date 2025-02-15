@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation"; // ✅ Importer useParams
-// import { supabase } from "@/lib/supabaseClient";
+import { useParams } from "next/navigation";
 
 const ItemPage = () => {
-  const params = useParams(); // ✅ Récupérer params via useParams()
-  const id = params.id as string; // ✅ Extraire l'ID
+  const params = useParams();
+  const id = params.id as string; // Extraire l'ID de l'URL
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -14,15 +13,16 @@ const ItemPage = () => {
   const [itemName, setItemName] = useState("");
   const [room, setRoom] = useState("");
   const [quantity, setQuantity] = useState(1);
-  const [action, setAction] = useState("add"); // Ajouter ou Retirer
-  const [isSubmitting, setIsSubmitting] = useState(false); // Nouvel état pour gérer la soumission
-  const [isValidating, setIsValidating] = useState(false); // Nouvel état pour gérer la soumission
+  const [remainingQuantity, setRemainingQuantity] = useState(0);
+  const [action, setAction] = useState("add");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [showValidateEmailButton, setShowValidateEmailButton] = useState(false);
 
   useEffect(() => {
-    console.log("ID récupéré de l'URL :", id); // ✅ Vérification
+    console.log("ID récupéré de l'URL :", id);
   
     if (!id) {
       setError("ID introuvable.");
@@ -31,13 +31,13 @@ const ItemPage = () => {
   
     const fetchItem = async () => {
       try {
-        // Faire une requête GET à ton backend pour récupérer les informations de l'objet
         const response = await fetch(`http://localhost:5000/item/${id}`);
         const result = await response.json();
   
         if (response.ok && result.success) {
           setItemName(result.name);
           setRoom(result.location);
+          setRemainingQuantity(result.quantity);
         } else {
           setError(result.message || "Erreur de chargement des données");
         }
@@ -63,10 +63,9 @@ const ItemPage = () => {
   
     setEmailError(null);
     setError(null);
-    setIsSubmitting(true); // Bloque le bouton lors de la soumission
+    setIsSubmitting(true);
   
     try {
-      // Continue avec la transaction
       const data = {
         id: id,
         first_name: firstName,
@@ -171,7 +170,7 @@ const ItemPage = () => {
     <div className="max-w-lg mx-auto mt-10 p-6 border rounded-lg shadow-md bg-gray-100 w-full md:w-2/3 lg:w-1/2">
       <h1 className="text-xl font-bold text-gray-900">Réservation d'Objet</h1>
 
-      <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+      <form onSubmit={handleSubmit} className="mt-4 space-y-3">
       <div>
           <label className="block text-gray-700">Email :</label>
           <input
@@ -182,6 +181,11 @@ const ItemPage = () => {
             required
             className="w-full p-2 border rounded"
           />
+          {(email.trim().endsWith("@yahoo.com") || email.trim().endsWith("@yahoo.fr")) && (
+            <p className="text-sm text-yellow-600">
+              ⚠️ Les adresses Yahoo ne sont pas prises en charge pour la vérification.
+            </p>
+          )}
           {emailError && <p className="text-red-500 text-sm mt-1">{emailError}</p>}
         </div>
 
@@ -195,7 +199,7 @@ const ItemPage = () => {
             required
             className={`w-full p-2 border rounded ${
               !showValidateEmailButton ? "bg-gray-200" : "bg-white"
-            }`} // Grisé par défaut
+            }`}
           />
         </div>
 
@@ -209,20 +213,22 @@ const ItemPage = () => {
             required
             className={`w-full p-2 border rounded ${
               !showValidateEmailButton ? "bg-gray-200" : "bg-white"
-            }`} // Grisé si l'email est reconnu
+            }`}
           />
         </div>
 
         {showValidateEmailButton && firstName.trim() !== "" && lastName.trim() !== "" && (
-          <button
-            type="button"
-            disabled={isValidating} 
-            onClick={handleValidateEmail}
-            className={`w-full p-2 bg-green-500 text-white rounded hover:bg-green-600
-              ${isValidating ? "bg-gray-400 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-600"}`}
-          >
-            {isValidating ? "Traitement en cours..." : "Valider l'adresse email"}
-          </button>
+          <div className="space-y-2">
+            <button
+              type="button"
+              disabled={isValidating}
+              onClick={handleValidateEmail}
+              className={`w-full p-2 bg-green-500 text-white rounded hover:bg-green-600
+                ${isValidating ? "bg-gray-400 cursor-not-allowed" : "bg-green-500 hover:bg-green-600"}`}
+            >
+              {isValidating ? "Traitement en cours..." : "Valider l'adresse email"}
+            </button>
+          </div>
         )}
 
         <div>
@@ -267,11 +273,14 @@ const ItemPage = () => {
             required
             className="w-full p-2 border rounded"
           />
+          <p className="text-sm text-gray-500 mt-1">
+            Quantité restante : {remainingQuantity}
+          </p>
         </div>
 
         <button
           type="submit"
-          disabled={isSubmitting || showValidateEmailButton} // Désactive le bouton si showValidateEmailButton est true
+          disabled={isSubmitting || showValidateEmailButton}
           className={`w-full p-2 text-white rounded transition duration-200 
             ${isSubmitting || showValidateEmailButton ? "bg-gray-400 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-600"}`}
         >
